@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "willow",
-  "name": "Mint Starter Kit",
+  "name": "Nick Sandbox",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0086F0",
+    "light": "#ffffff",
+    "dark": "#000000"
   },
   "favicon": "/favicon.svg",
   "navigation": {
