@@ -1,0 +1,68 @@
+---
+title: "3. Dictonaries and Sets"
+description: "Description of your new file."
+---
+
+- `frozenset()` is immutable and hashable.
+- functions can modify objects outside of their scope.
+- e.g frozen set has no attribute `.pop` while the list will be modified.
+
+```python
+def func(sequence):
+    x = sequence.pop(0)
+    print(f'Popped: {x}')
+
+set_data = frozenset(_ for _ in range(10)
+list_data = [_ for _ in range(10)]
+```
+
+- Local encodings can be different for example in the short script following on MacOS
+
+```python
+expression = 'locale.getpreferredencoding()'
+
+value = eval(expression)
+print(f'{expression:>30} -> {value!r}')
+```
+
+```python
+locale.getpreferredencoding() -> 'UTF-8'
+```
+
+versus the following output on Windows
+
+```python
+locale.getpreferredencoding() -> 'cp1252'
+```
+
+Can get around this by surrounding the unicode literal in `\\N{}` - this is also why it is important to set encoding when opening a file `with open(file, encoding='utf-8')`
+
+```python
+test_chars = [
+    '\\N{CIRCLED NUMBER FORTY TWO}',  # not in cp437 or in cp1252
+]
+
+for char in test_chars:
+    print(f'Trying to output {name(char)}:')
+    print(char)
+```
+
+Also two strings can look identical but be different code points
+
+```python
+from unicodedata import normalize
+
+s1 = 'café'
+s2 = 'cafe\\N{COMBINING ACUTE ACCENT}'
+
+len(s1), len(s2)
+(4, 5)
+s1 == s2
+False
+
+# using the normalize function
+len(normalize('NFC', s1)), len(normalize('NFC', s2))
+(4, 4)
+normalize('NFC', s1) == normalize('NFC', s2)
+True
+```
