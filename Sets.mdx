@@ -3,6 +3,508 @@ title: "3. Dictonaries and Sets"
 description: "Description of your new file."
 ---
 
+- Modern syntax to build and handle `dicts` and mappings, including enhanced unpacking and pattern matching
+- Common methods of mapping types
+- Special handling for missing keys
+- Variations of `dict` in the standard library
+- The `set` and `frozenset` types
+- Implications of hash tables in the behavior of sets and dictionaries
+
+**Example, unpacking **`dump`**function** 
+
+- The function `dump` is defined to accept any number of keyword arguments. The `**kwargs` syntax allows you to pass a variable number of keyword arguments (like a dictionary) to the function.
+- The use case for this function is quite straightforward. It is designed to take any number of named arguments and return them as a dictionary. This can be useful for:
+- **Debugging:** You can use this function to capture and inspect the keyword arguments passed to it, which can be helpful for debugging purposes.
+- **Data Aggregation:** It can aggregate various pieces of data into a single dictionary structure, which can then be used elsewhere in your code
+
+```python
+import numpy as np
+
+def dump(**kwargs):
+	return kwargs
+
+dump(**{'x': np.arange(12), 'y': np.arange(12)}
+```
+
+### Build an index mapping word Counter
+
+```python
+"""Build an index mapping word -> list of occurrences"""
+
+import re
+import sys
+
+WORD_RE = re.compile(r'\w+')
+
+index = {}
+with open(sys.argv[1], encoding='utf-8') as fp:
+	for line_no, line in enumerate(fp, 1):
+		for match in WORD_RE.finditer(line):
+			word = match.group()
+			column_no = match.start() + 1
+			location = (line_no, column_no)
+			index[word].append(location)
+
+# display in alphabetical order
+for word in sorted(index, key=str.upper):
+	print(word, index[word])
+```
+
+- The way python handles `d.update(m)` is an example of **duck typing**
+
+
+- Check if `m` has `keys` method, if it does it is a mapping
+- Otherwise, `update()` falls back to iterating over `m` assuming they are k, v pairs
+- The constructor for most python mappings uses the logic of `update()` internally, which means they can be initialized from other mappings or from any iterable object producing k, v pairs.
+- Subtle mapping method is `setdefault()`
+
+```python
+my_dict = {}
+key = 'j'
+new_value = 'k'
+
+# This is the same ...
+my_dict.setdefault(key, []).append(new_value)
+
+# ... as this
+if key not in my_dict:
+	my_dict[key] = []
+	my_dict[key].append(new_value)
+```
+
+#### Handling of Missing Keys
+
+- There are two main approaches to handling missing keys, `defaultdict` and subclass of `dict` adding a `__missing__` method
+- in the indexing method above, we intead assign the following (rest of the code stays the exact same)
+- Now the default value is an empty list\!
+
+```python
+from collections import defaultdict
+
+index = {}
+
+index = defaultdict(list)
+```
+
+- The `__missing__` method requires us to actually define how missing values are handled - if a value is missing this method will be called instead.
+- In the following code the new `StrKeyDict0` class. The benefit to this class is **key normalization**:
+
+1. inherits all other class methods from `dict`
+2. in the `__missing__` method we ask is the instance a `str` and is it missing, raise a `KeyError`
+   - We need the `isinstance` in the `__missing__` because without it any key could be passed, and if it were not there could lead to an infinite recursion.
+   - we can build `str` from `key` and look it up.
+3. The `get` method allows `__missing__` the opportunity to act. (if `KeyError`, then missing already failed)
+
+`StrKeyDict0`: Ensures that any key, whether passed as an integer or string, is always looked up as a string. This means `d[2]` and `d['2']` refer to the same entry
+
+Typical Use Cases:
+
+- **Data cleaning**: When keys might be mixed types (e.g., JSON, CSV, user input).
+- **APIs**: When you want to be agnostic to string/int keys in parameters.
+- **Legacy code**: When older code sometimes uses int and sometimes string keys.
+
+Be careful with this method as different behaviors are supported by default in different library mappings. `dict`, `collections.UserDict`, `abc.Mapping` are examples where the default handling in relation to `get` can have vastly different outcomes.
+
+```python
+class StrKeyDict0(dict):
+
+    def __missing__(self, key):
+        if isinstance(key, str):
+            raise KeyError(key)
+        return self[str(key)]
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key):
+        return key in self.keys() or str(key) in self.keys()
+```
+
+#### `collections.OrderedDict`
+
+- Equality operation checks matching order
+- `move_to_end()` method efficiently reposition an element to an endpoint
+- `ordereddict.popitem()` method pops the last item
+- Space efficiency, iteration speed and the performance of update operations were secondary, but reordering operations are fast
+- Can handle frequent reordering operations better than `dict`
+
+#### `collections.ChainMap`
+
+- Allows multiple dicts to be grouped together into a single unified view.
+- Dynamically updates with the original dictionaries - e.g. a key added to one is reflected in the `ChainMap`.
+- The class can be used to simulate nested scopes and is useful in templating.
+
+```python
+from collections import ChainMap
+
+# Default and user-specific settings
+default_settings = {'theme': 'light', 'notifications': True}
+user_settings = {'theme': 'dark'}
+
+# Combine settings with ChainMap
+# any overlaps in position 2 will be overwritten by position 1 - think of position 1 as the desired values
+combined_settings = ChainMap(user_settings, default_settings)
+
+
+# Access settings
+print(combined_settings['theme'])  # Output: 'dark'
+print(combined_settings['notifications'])  # Output: True
+```
+
+### `collections.counter`
+
+- Counts occurrences in a hashable container.
+- e.g number of occurrences of `a` in `aaaaaaaaaba`
+- number of occurrences of 1 in [1, 1, 1, 2, 3, 4, 5]
+
+  ```python
+  import collections
+  
+  ct = collections.Counter('ABBAACCAABBAABBA')
+  print(ct)
+  ct.update('AZZZZZZAAAZZZZZ')
+  print(ct.most_common())
+  ```
+
+### `UserDict`
+
+If we want to subclass it's better to use `UserDict` than stock dict because dict has some implementation shortcuts that end up forcing us to override methods
+
+```python
+import collections
+
+
+class StrKeyDict(collections.UserDict):
+
+    def __missing__(self, key):
+        if isinstance(key, str):
+            raise KeyError(key)
+        return self[str(key)]
+    
+    def __contains__(self, key):
+        return str(key) in self.data
+    
+    def __setitem__(self, key, item):
+        self.data[str(key)] = item 
+```
+
+import collections
+
+class StrKeyDict(collections.UserDict):
+
+ def \__missing_\_(self, key):
+
+ if isinstance(key, str):
+
+ raise KeyError(key)
+
+ return self[str(key)]
+
+ def \__contains_\_(self, key):
+
+ return str(key) in [self.data](http://self.data)
+
+ def \__setitem_\_(self, key, item):
+
+ [self.data](http://self.data)[str(key)] = item
+
+# create an immutable but dynamic proxy for the original mapping
+
+from types import MappingProxyType
+
+d = {1: 'A'}
+
+d_proxy = MappingProxyType(d)
+
+d = dict(jewels=500, gold=1000, silver=500)
+
+print(d.values())
+
+print(d.keys())
+
+print(d.items())
+
+Dict Conclusions
+
+A dict may have millions of keys, but Python can locate a key directly by computing the hash code of the key and deriving an index offset into the hash table, with the possible overhead of a small number of tries to find a matching entry.
+
+Keys must be hashable objects. They must implement proper \__hash_\_ and \__eq_\_ methods
+
+Set Theory
+
+A set is a collection of unique objects
+
+A basic use case is removing duplication.
+
+Note: Order will not be preserved.
+
+Sets have larger memory overhead but have extremely efficient membership testing.
+
+Element addition will change relative order.
+
+l = ['GREP1', 'B2M', 'B2M', 'GENX']
+
+s = set(l)
+
+print(s)
+
+m = list(s)
+
+print(m)
+
+genes_wt = ['B2M', 'TRAC', 'RUNX1', 'RUNX2']
+
+genes_mut = ['B2M', 'TRAC', 'RUNX1', 'RUNX2', 'RUNX3']
+
+n_common_genes = len(set(genes_wt) & set(genes_mut))
+
+alt_n_common_genes = len(set(genes_wt).intersection(genes_mut))
+
+print(n_common_genes)
+
+print(alt_n_common_genes)
+
+common_genes = set(genes_wt) & set(genes_mut)
+
+union_genes = set(genes_wt).union(set(genes_mut))
+
+dif_genes = set(genes_mut) - set(genes_wt)
+
+print(common_genes)
+
+print(union_genes)
+
+print(dif_genes)
+
+Character
+
+The identity of a character - its code point - is a number from 0 to 1114111
+
+Typically, in Unicode 4 to 6 hex digits.
+
+The actual bytes that represent a character depend on the encoding.
+
+Ex. \\x41 in UTF-8 but \\x41\\x00 in UTF-16LE
+
+s = 'cafe'
+
+len(s)
+
+b = s.encode('utf8')
+
+print(b)
+
+print(b.decode('utf8'))
+
+bytes.fromhex('31 4B CE A9')
+
+for codec in ['latin_1', 'utf_8', 'utf_16']:
+
+ print(codec, 'El Niño'.encode(codec), sep='\\t')
+
+frozenset() is immutable and hashable.
+
+functions can modify objects outside of their scope.
+
+e.g frozen set has no attribute .pop while the list will be modified.
+
+def func(sequence):
+
+ x = sequence.pop(0)
+
+ print(f'Popped: {x}')
+
+set_data = frozenset(\_ for \_ in range(10)
+
+list_data = [\_ for \_ in range(10)]
+
+Local encodings can be different for example in the short script following on MacOS
+
+expression = 'locale.getpreferredencoding()'
+
+value = eval(expression)
+
+print(f'{expression:\>30} -\> {value\!r}')
+
+locale.getpreferredencoding() -\> 'UTF-8'
+
+versus the following output on Windows
+
+locale.getpreferredencoding() -\> 'cp1252'
+
+Can get around this by surrounding the unicode literal in \\\\N{} - this is also why it is important to set encoding when opening a file with open(file, encoding='utf-8')
+
+test_chars = [
+
+ '\\\\N{CIRCLED NUMBER FORTY TWO}', # not in cp437 or in cp1252
+
+]
+
+for char in test_chars:
+
+ print(f'Trying to output {name(char)}:')
+
+ print(char)
+
+Also two strings can look identical but be different code points
+
+from unicodedata import normalize
+
+s1 = 'café'
+
+s2 = 'cafe\\\\N{COMBINING ACUTE ACCENT}'
+
+len(s1), len(s2)
+
+(4, 5)
+
+s1 == s2
+
+False
+
+# using the normalize function
+
+len(normalize('NFC', s1)), len(normalize('NFC', s2))
+
+(4, 4)
+
+normalize('NFC', s1) == normalize('NFC', s2)
+
+True
+
+Binary sequences have a class method that str doesn’t have, called fromhex, which builds a binary sequence by parsing pairs of hex digits optionally separated by spaces.
+
+Cannot know the encoding unless told - there is a package chardetect that will guess what the encoding is.
+
+Always pass default encoding=parameter when reading and writing.
+
+Careful, two strings may be composed differently and look fundamentally similar, but result in inequalities.
+
+We can utilize the normalize package to solve for some of these conflicts in unicode.
+
+str1 = 'café'
+
+str2 = 'cafe\\N{COMBINING ACUTE ACCENT}'
+
+print(str1, str2)
+
+print(str1 == str2)
+
+from unicodedata import normalize, name
+
+ohm = '\\u2126'
+
+print(name(ohm))
+
+ohm_c = normalize('NFC', ohm)
+
+print(name(ohm_c))
+
+print(normalize('NFC', ohm) == normalize('NFC', ohm_c))
+
+################################################################################
+
+### Transform some Western typographical symbols into ASCII
+
+################################################################################
+
+import unicodedata
+
+import string
+
+single_map = str.maketrans("""‚ƒ„ˆ‹‘’“”•–—˜›""", """'f"^\<''""---~\>""")
+
+multi_map = str.maketrans({
+
+ '€': 'EUR',
+
+ '…': '...',
+
+ 'Æ': 'AE',
+
+ 'æ': 'ae',
+
+ 'Œ': 'OE',
+
+ 'œ': 'oe',
+
+ '™': '(TM)',
+
+ '‰': '\<per mille\>',
+
+ '†': '\*\*',
+
+ '‡': '\*\*\*',
+
+})
+
+multi_map.update(single_map)
+
+def shave_marks(txt):
+
+ """Remove all diacritic marks"""
+
+ norm_txt = unicodedata.normalize('NFD', txt)
+
+ shaved = ''.join(c for c in norm_txt
+
+ if not unicodedata.combining(c))
+
+ return unicodedata.normalize('NFC', shaved)
+
+def shave_marks_latin(txt):
+
+ """Remove all diacritic marks from Latin base characters"""
+
+ norm_txt = unicodedata.normalize('NFD', txt)
+
+ latin_base = False
+
+ preserve = []
+
+ for c in norm_txt:
+
+ if unicodedata.combining(c) and latin_base:
+
+ continue # ignore diacritic on Latin base char
+
+ preserve.append(c)
+
+ # if it isn't a combining char, it's a new base char
+
+ if not unicodedata.combining(c):
+
+ latin_base = c in string.ascii_letters
+
+ shaved = ''.join(preserve)
+
+ return unicodedata.normalize('NFC', shaved)
+
+def dewinize(txt):
+
+ """Replace Win1252 symbols with ASCII chars or sequences"""
+
+ return txt.translate(multi_map)
+
+def asciize(txt):
+
+ no_marks = shave_marks_latin(dewinize(txt))
+
+ no_marks = no_marks.replace('ß', 'ss')
+
+ return unicodedata.normalize('NFKC', no_marks)
+
+## Example
+
+order = '“Herr Voß: • ½ cup of Œtker™ caffè latte • bowl of açaí.”'
+
+print(dewinize(order))
+
+print(asciize(order))
+
 - `frozenset()` is immutable and hashable.
 - functions can modify objects outside of their scope.
 - e.g frozen set has no attribute `.pop` while the list will be modified.
